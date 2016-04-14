@@ -28,7 +28,7 @@ var inviteType = noInvite;
 PMN() = PMNSyn();PMNAsyn();PMN();
   
 
-PMNSyn() = network!MN.Soc.SendToAll-> MNCycleIncrease{CycleCounter = CycleCounter+1;} 
+PMNSyn() = network!MN.Soc.SendToAll-> MNCycleIncrease{CycleCounter = (CycleCounter+1)%2;} 
 		-> network!MN.Pres.PRCPresTime1.PRCPresTime2
 		-> atomic{network?CN.1.Pres.PR.RS
 		-> UpdateOrnot(1, PR, RS)};
@@ -40,7 +40,7 @@ PMNSyn() = network!MN.Soc.SendToAll-> MNCycleIncrease{CycleCounter = CycleCounte
 		   network!MN.Preq.4
 		-> atomic{network?CN.4.Pres.PR.RS
 		-> UpdateOrnot(4, PR, RS)};
-		   if(CycleCounter % MultiplexedCycle == 1)
+		   if(CycleCounter == 1)
 		   {
 		    network!MN.Preq.5 
 		 -> network?CN.5.Pres.PR.RS
