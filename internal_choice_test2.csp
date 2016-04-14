@@ -1,0 +1,24 @@
+﻿enum {MN, CN};
+enum {Soc, Preq, Pres, SoA, Asnd};
+enum {SendToAll, PRCPresTime1, PRCPresTime2};
+enum {genericInvite, NMTInvite, noInvite};	
+enum {presTimeout};
+var PRSend = 0;
+var RSSend = 0;
+
+var Cycle=0;
+channel network 0;
+
+PA()= network?CN.1.Pres.PR.RS->Skip;
+PB()=network?CN.1.Pres.presTimeout->Skip;
+
+PC() = PA()[]PB();
+
+PD()=CycleIncrease{Cycle=(Cycle+1)%2}->((network!CN.1.Pres.PRSend.RSSend -> Skip())
+		    <>
+		    (network!CN.1.Pres.presTimeout -> Skip())
+		    );
+		    
+P()=(PC()||PD());P();
+
+
