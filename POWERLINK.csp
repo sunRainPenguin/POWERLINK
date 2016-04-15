@@ -215,4 +215,5 @@ P() = (PMN() || PCN());P();
 //CNPR7[2]=0 && CNPR7[3]=0 && CNPR7[4]=0 && CNPR7[5]=0 && CNPR7[6]=0;
 #assert P() reaches success7;
 #assert P() reaches success3;
+#assert P() deadlockfree;
 

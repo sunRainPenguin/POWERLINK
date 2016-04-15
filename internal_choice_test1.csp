@@ -14,10 +14,11 @@ PB()=network?CN.1.Pres.presTimeout->Skip;
 
 PC() = PA()[]PB();
 
-PD()=CycleIncrease{Cycle++}->((network!CN.1.Pres.PRSend.RSSend -> Skip())
-		    <>
-		    (network!CN.1.Pres.presTimeout -> Skip())
-		    );
+PD()= CycleIncrease{Cycle++}
+   -> ((network!CN.1.Pres.PRSend.RSSend -> Skip())
+		<>
+	   (network!CN.1.Pres.presTimeout -> Skip())
+	  );
 		    
 P()=(PC()||PD());P();
 
