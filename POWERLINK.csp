@@ -1,11 +1,11 @@
 ﻿enum{MN, CN};
 enum{Soc, Preq, Pres, SoA, Asnd};
-enum{SendToAll, PRCPresTime1, PRCPresTime2};
-enum{genericInvite, NMTInvite, noInvite};
+enum{SendToAll, PRCPresTime};
+enum{unspecInvite, NMTInvite, noInvite};
 	
 #define MultiplexedCycle 2;
 
-channel network 0;
+channel Ethernet 0;
 var CycleCounter = 0;
 var losePresErr =0;
 
@@ -28,29 +28,29 @@ var inviteType = noInvite;
 PMN() = PMNSyn();PMNAsyn();
   
 
-PMNSyn() = network!MN.Soc.SendToAll-> MNCycleIncrease{CycleCounter = (CycleCounter+1)%2;} 
-		-> network!MN.Pres.PRCPresTime1.PRCPresTime2
-		-> atomic{network?CN.1.Pres.PR.RS
+PMNSyn() = Ethernet!MN.Soc.SendToAll-> MNCycleIncrease{CycleCounter = (CycleCounter+1)%2} 
+		-> Ethernet!MN.Pres.PRCPresTime
+		-> atomic{Ethernet?CN.1.Pres.PR.RS
 		-> UpdateOrnot(1, PR, RS)};
-		   atomic{network?CN.2.Pres.PR.RS
+		   atomic{Ethernet?CN.2.Pres.PR.RS
 		-> UpdateOrnot(2, PR, RS)};
-		   network!MN.Preq.3 
-		-> atomic{network?CN.3.Pres.PR.RS
+		   Ethernet!MN.Preq.3 
+		-> atomic{Ethernet?CN.3.Pres.PR.RS
 		-> UpdateOrnot(3, PR, RS)};
-		   network!MN.Preq.4
-		-> atomic{network?CN.4.Pres.PR.RS
+		   Ethernet!MN.Preq.4
+		-> atomic{Ethernet?CN.4.Pres.PR.RS
 		-> UpdateOrnot(4, PR, RS)};
-		   if(CycleCounter == 1)
+		   ifa(CycleCounter == 1)
 		   {
-		    network!MN.Preq.5 
-		 -> network?CN.5.Pres.PR.RS
+		    Ethernet!MN.Preq.5 
+		 -> Ethernet?CN.5.Pres.PR.RS
 		 -> UpdateOrnot(5, PR, RS);
 		    Skip
 		   }
 		   else
 		   {
-			network!MN.Preq.6
-		 -> network?CN.6.Pres.PR.RS
+			Ethernet!MN.Preq.6
+		 -> Ethernet?CN.6.Pres.PR.RS
 		 -> UpdateOrnot(6, PR, RS);
 		    Skip
 		   }
@@ -88,7 +88,7 @@ PMNAsyn() = MNSchedule
 			    if(MNPR3[index]!=0)		
 			    {
 			    hasGenSchedule = 1;			
-			    inviteType = genericInvite;
+			    inviteType = unspecInvite;
 			    if(CNPrio[index] > CNPrioTemp)
 			    {
 			    CNPrioTemp = CNPrio[index];
@@ -100,13 +100,13 @@ PMNAsyn() = MNSchedule
 		    }
 		    }
 		 ->
-   		 network!SoA.inviteTarget.inviteType
+   		 Ethernet!SoA.inviteTarget.inviteType
 		 -> 
 		 MNupdateMNList{
 			 if(inviteTarget!=-1)
 			 {
 			 	if(inviteType == NMTInvite){MNPR7[inviteTarget]--}
-			 	if(inviteType == genericInvite){MNPR3[inviteTarget]--}
+			 	if(inviteType == unspecInvite){MNPR3[inviteTarget]--}
 			 }
 			 
 			 var index = 1;
@@ -118,7 +118,7 @@ PMNAsyn() = MNSchedule
 					 if(updatePR[index] == 3)
 					 {
 					 MNPR3[index]=updateRS[index];
-					 if(index==inviteTarget && inviteType == genericInvite){MNPR3[index]--} 		//这一次SoA是否调度到该请求
+					 if(index==inviteTarget && inviteType == unspecInvite){MNPR3[index]--} 		//这一次SoA是否调度到该请求
 					 }
 					 
 					 if(updatePR[index] == 7)
@@ -131,38 +131,38 @@ PMNAsyn() = MNSchedule
 			 }
 			 
 		 }		
-	  ->if(inviteTarget!=-1){network?CN.i.Asnd -> Skip}
-	  else{Skip};
+	  ->ifa(inviteTarget!=-1){Ethernet?CN.i.Asnd -> Skip}
+	   else{Skip};
 		   
-PCN() = network?MN.Soc.SendToAll
-	  -> network?MN.Pres.PRCPresTime1.PRCPresTime2	
-	  -> PRCSyn(1);
-	     PRCSyn(2);
-	     NormalMultiplexedSyn(3);
-	     NormalMultiplexedSyn(4);
-         (NormalMultiplexedSyn(5)[]NormalMultiplexedSyn(6));
-	     network?SoA.invitedTarget.invitedType
-	  ->atomic{if(invitedTarget!=-1){CNAsyn(invitedTarget, invitedType)}};
-	    
-		 
+PCN() = PCNSyn();PCNAsyn();    
+PCNSyn() = 	Ethernet?MN.Soc.SendToAll
+	     -> Ethernet?MN.Pres.PRCPresTime
+	     -> PRCSyn(1);
+	        PRCSyn(2);
+	        NormalMultiplexedSyn(3);
+	        NormalMultiplexedSyn(4);
+           (NormalMultiplexedSyn(5)[]NormalMultiplexedSyn(6));
 
+PCNAsyn() = Ethernet?SoA.invitedTarget.invitedType
+	     -> ifa(invitedTarget!=-1){CNAsyn(invitedTarget, invitedType)};
+         
 //PRC从站节点同步进程
 PRCSyn(i) = MaxPrio(i);
-		    network!CN.i.Pres.PRSend.RSSend 
-	     -> Skip();
+		    Ethernet!CN.i.Pres.PRSend.RSSend 
+	     -> Skip;
 	     
 //Normal从站节点和Multiplexed从站节点同步进程
-NormalMultiplexedSyn(i) = network?MN.Preq.i 
+NormalMultiplexedSyn(i) = Ethernet?MN.Preq.i 
 			-> MaxPrio(i);
-		       network!CN.i.Pres.PRSend.RSSend
+		       Ethernet!CN.i.Pres.PRSend.RSSend
 		    -> Skip;
 
 //从站异步进程
 CNAsyn(i, invitedType) = 
-				         network!CN.i.Asnd 
+				         Ethernet!CN.i.Asnd 
 				         ->
 				         updateCNList{
-				         if(invitedType == genericInvite){CNPR3[i]--}
+				         if(invitedType == unspecInvite){CNPR3[i]--}
 				         if(invitedType == NMTInvite){CNPR7[i]--}
 				         }
 				         ->Skip;
