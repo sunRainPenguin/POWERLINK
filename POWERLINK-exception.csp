@@ -1,0 +1,254 @@
+﻿enum{MN, CN};
+enum{Soc, Preq, Pres, SoA, Asnd};
+enum{SendToAll, PRCPresTime};
+enum{unspecInvite, NMTInvite, noInvite};
+enum{presReceived, presTimeout};
+enum{losePresException};
+
+#define MultiplexedCycle 2;
+#define Threshold  16;
+
+channel Ethernet 0;
+var CycleCounter = -1;
+var ThresholdCounter =0;
+var exceptionActive = false;			//表示是否产生丢帧错误	
+var exceptionHandling = false;			//异常被处理
+var ThresholdCounterDeactivated = false;	//表示是否使Threshold从一个正数减少到0
+
+var CNPR3 = [0, 1, 0, 0, 1, 0, 1];			//从站任务列表
+var CNPR7 = [0, 1, 0, 1, 0, 0, 1];				
+
+var MNPR3 = [0, 0, 0, 0, 0, 0, 0];			//主站任务列表
+var MNPR7 = [0, 0, 0, 0, 0, 0, 0];
+var CNPrio = [0, 6, 5, 4, 3, 2, 1];			//从站优先级
+
+var needUpdate = [0, 0, 0, 0, 0, 0, 0];
+var updatePR = [-1, -1, -1, -1, -1, -1, -1];			//需要更新的任务优先级
+var updateRS = [-1, -1, -1, -1, -1, -1, -1];
+
+var PRSend = 0;
+var RSSend = 0;
+var inviteTarget = -1;				//异步没有调度的话，target设为-1
+var inviteType = noInvite;
+
+PMN() = PMNSyn();
+  
+
+PMNSyn() = Ethernet!MN.Soc.SendToAll-> MNCycleIncrease{CycleCounter = (CycleCounter+1)%2} 
+		-> Ethernet!MN.Pres.PRCPresTime
+		->
+		  (
+		  atomic{
+		  Ethernet?CN.i.Pres.PR.RS  
+	   -> errorDecrease {
+		  if(ThresholdCounter>0){
+		  	ThresholdCounter--;
+		  	if(ThresholdCounter==0)
+		  	   ThresholdCounterDeactivated=true;	
+		  	}
+		  }
+	   -> UpdateOrnot(i, PR, RS)
+		   }
+	      []
+	      atomic{
+	      Ethernet?CN.i.Pres.presTimeout   
+	   -> errorIncrease {
+	      ThresholdCounter = ThresholdCounter + 8;
+	      if(ThresholdCounter>0) ThresholdCounterDeactivated=false;
+	      if(ThresholdCounter>Threshold){
+	        exceptionActive= true;
+	      	ThresholdCounter = 0;
+	      	ThresholdCounterDeactivated = true;
+	      	}
+	      }
+	   -> Skip
+	      }
+	      ); 
+	      atomic{
+	      if(exceptionActive==true){
+	      Ethernet!losePresException->Skip
+	     }};
+//		-> MNPRCPhrase(1);
+          MNPRCPhrase(2);
+
+MNPRCPhrase(i) = atomic{Ethernet?CN.i.Pres.PR.RS
+		      -> UpdateOrnot(i, PR, RS)};
+MNNormalPhrase(i) = Ethernet!MN.Preq.i 
+		                    -> atomic{Ethernet?CN.i.Pres.PR.RS
+		                    -> UpdateOrnot(i, PR, RS)};
+MNMultiplexedPhrase(i) = MNNormalPhrase(i);	 
+                   
+//根据MN当前的list进行异步调度		   
+PMNAsyn() = MNSchedule
+		    {
+		    var index = 1;
+		    var CNPrioTemp = -1;
+		    inviteTarget = -1;
+		    inviteType = noInvite;
+		    var hasNMTSchedule = 0;
+		    var hasGenSchedule = 0;
+		    while(index<=6)
+		    {
+			    if(MNPR7[index]!=0)
+			    {
+			    hasNMTSchedule = 1;
+			    inviteType = NMTInvite;
+			    if(CNPrio[index] > CNPrioTemp)
+			    {
+			    CNPrioTemp = CNPrio[index];
+			    inviteTarget = index;
+			    }
+			    }
+		    index++;
+		    }
+		    
+		    index = 1;
+		    if(hasNMTSchedule==0)			//当主站的list中没有优先级为7的任务时
+		    {
+			    while(index<=6)
+			    {
+			    if(MNPR3[index]!=0)		
+			    {
+			    hasGenSchedule = 1;			
+			    inviteType = unspecInvite;
+			    if(CNPrio[index] > CNPrioTemp)
+			    {
+			    CNPrioTemp = CNPrio[index];
+			    inviteTarget = index;
+			    }
+			    }
+			    index++;
+			    }
+		    }
+		    }
+		 ->
+   		 Ethernet!MN.SoA.inviteTarget.inviteType
+		 -> 
+		 MNupdateMNList{
+			 if(inviteTarget!=-1)
+			 {
+			 	if(inviteType == NMTInvite){MNPR7[inviteTarget]--}
+			 	if(inviteType == unspecInvite){MNPR3[inviteTarget]--}
+			 }
+			 
+			 var index = 1;
+			 while(index <=6)
+			 {
+				 if(needUpdate[index]==1)		//根据它是否需要更新对MN的list进行更新
+				 {
+				 
+					 if(updatePR[index] == 3)
+					 {
+					 MNPR3[index]=updateRS[index];
+					 if(index==inviteTarget && inviteType == unspecInvite){MNPR3[index]--} 		//这一次SoA是否调度到该请求
+					 }
+					 
+					 if(updatePR[index] == 7)
+					 {
+					 MNPR7[index]=updateRS[index];
+					 if(index==inviteTarget && inviteType == NMTInvite){MNPR7[index]--}
+					 }
+				 }
+				 index++;
+			 }
+			 
+		 }		
+	  ->ifa(inviteTarget!=-1){Ethernet?CN.i.Asnd -> Skip}
+	   else{Skip};
+		   
+PCN() = PCNSyn();
+PCNSyn() = 	Ethernet?MN.Soc.SendToAll
+	     -> Ethernet?MN.Pres.PRCPresTime
+	     ->(
+	       (Ethernet!CN.1.Pres.presTimeout -> Skip)
+		  <>
+		  atomic{
+		  (MaxPrio(1);
+		  Ethernet!CN.1.Pres.PRSend.RSSend -> Skip)}
+		   );
+//	     -> PRCSyn(1);
+	        PRCSyn(2);
+
+PCNAsyn() = Ethernet?MN.SoA.invitedTarget.invitedType
+	     -> ifa(invitedTarget!=-1){CNAsyn(invitedTarget, invitedType)};
+         
+//PRC从站节点同步进程
+PRCSyn(i) = MaxPrio(i);
+		    Ethernet!CN.i.Pres.PRSend.RSSend 
+	     -> Skip;
+	     
+//Normal从站节点和Multiplexed从站节点同步进程相同
+NormalSyn(i) = Ethernet?MN.Preq.i 
+			-> MaxPrio(i);
+		       Ethernet!CN.i.Pres.PRSend.RSSend
+		    -> Skip;
+MultiplexedSyn(i) = NormalSyn(i);
+
+//从站异步进程
+CNAsyn(i, invitedType) = 
+				         Ethernet!CN.i.Asnd 
+				         ->
+				         updateCNList{
+				         if(invitedType == unspecInvite){CNPR3[i]--}
+				         if(invitedType == NMTInvite){CNPR7[i]--}
+				         }
+				         ->Skip;
+         
+
+MaxPrio(i) = CNfindMaxPrio
+			{
+			 if(CNPR7[i]!=0)
+			 {
+			 PRSend = 7;
+			 RSSend = CNPR7[i];
+			 }
+			 else if(CNPR3[i]!=0)
+			 {
+			 PRSend = 3;
+			 RSSend = CNPR3[i];
+			 }
+			 else
+			 {
+			 PRSend = 0;
+			 RSSend = 0;
+			 }
+			 }
+			 -> Skip;
+			 
+//根据CN传来的PR和RS判断是否需要更新MN上的list
+UpdateOrnot(i, pr,rs) = MNwhetherUpdate{
+			   if(pr == 3)
+			   {
+				   if(rs==MNPR3[i]) {needUpdate[i] = 0}
+				   else {needUpdate[i] = 1; updatePR[i]=pr; updateRS[i]= rs} 
+			   }
+			   else if(pr == 7)
+			   {
+				   if(rs==MNPR7[i]) {needUpdate[i] = 0}
+				   else {needUpdate[i] = 1; updatePR[i]=pr; updateRS[i]= rs}
+			   }
+			   else
+			   {
+			   		needUpdate[i] = 0; updatePR[i] = -1; updateRS[i]= -1			   		
+			   }
+		   }
+		   ->Skip;
+		   
+P() = (PMN() || PCN());P();
+
+LosePresHandler() = Ethernet?losePresException->ExceptionHandling{exceptionHandling = true}->resetExceptionHandler{exceptionHandling = false}->LosePresHandler();
+System() = P() || LosePresHandler();
+#define success7 CNPR7[1]==0 && CNPR7[2]==0 && CNPR7[3]==0 && CNPR7[4]==0 && CNPR7[5]==0 && CNPR7[6]==0;			//高优先级的能否做完
+#define success3 CNPR3[1]==0 && CNPR3[2]==0 && CNPR3[3]==0 && CNPR3[4]==0 && CNPR3[5]==0 && CNPR3[6]==0;	
+#define exceptionState exceptionActive == true;
+#define exceptionDisabled ThresholdCounterDeactivated == true;
+#define exceptionHandled exceptionHandling == true; 
+
+//CNPR7[2]=0 && CNPR7[3]=0 && CNPR7[4]=0 && CNPR7[5]=0 && CNPR7[6]=0;
+#assert P() reaches success7; 
+#assert P() reaches success3;
+#assert P() reaches exceptionState;			//是否会到达异常状态
+#assert P() reaches exceptionDisabled;      //是否会在异常抛出前ThresholdCounter减少到0
+#assert System reaches exceptionHandled;		//异常是否正常抛出处理
+#assert P() deadlockfree;
+
