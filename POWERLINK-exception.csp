@@ -11,7 +11,7 @@ enum{losePresException};
 channel Ethernet 0;
 var CycleCounter = -1;
 var ThresholdCounter =0;
-var exceptionActive = false;			//表示是否产生丢帧错误	
+var exceptionActive = false;			//表示是否需要产生丢帧错误	
 var exceptionHandling = false;			//异常被处理
 var ThresholdCounterDeactivated = false;	//表示是否使Threshold从一个正数减少到0
 
@@ -47,7 +47,7 @@ PMNSyn() = Ethernet!MN.Soc.SendToAll-> MNCycleIncrease{CycleCounter = (CycleCoun
 		  	   ThresholdCounterDeactivated=true;	
 		  	}
 		  }
-	   -> UpdateOrnot(i, PR, RS)
+	   -> UpdateOrnot(1, PR, RS)
 		   }
 	      []
 	      atomic{
@@ -58,7 +58,6 @@ PMNSyn() = Ethernet!MN.Soc.SendToAll-> MNCycleIncrease{CycleCounter = (CycleCoun
 	      if(ThresholdCounter>Threshold){
 	        exceptionActive= true;
 	      	ThresholdCounter = 0;
-	      	ThresholdCounterDeactivated = true;
 	      	}
 	      }
 	   -> Skip
@@ -236,7 +235,7 @@ UpdateOrnot(i, pr,rs) = MNwhetherUpdate{
 		   
 P() = (PMN() || PCN());P();
 
-LosePresHandler() = Ethernet?losePresException->ExceptionHandling{exceptionHandling = true}->resetExceptionHandler{exceptionHandling = false}->LosePresHandler();
+LosePresHandler() = Ethernet?losePresException->ExceptionHandling{exceptionHandling = true}->resetExceptionHandler{exceptionHandling = false;exceptionActive=false;}->LosePresHandler();
 System() = P() || LosePresHandler();
 #define success7 CNPR7[1]==0 && CNPR7[2]==0 && CNPR7[3]==0 && CNPR7[4]==0 && CNPR7[5]==0 && CNPR7[6]==0;			//高优先级的能否做完
 #define success3 CNPR3[1]==0 && CNPR3[2]==0 && CNPR3[3]==0 && CNPR3[4]==0 && CNPR3[5]==0 && CNPR3[6]==0;	
