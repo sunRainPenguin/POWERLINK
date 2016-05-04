@@ -30,26 +30,26 @@ PMN() = PMNSyn();PMNAsyn();
 
 PMNSyn() = Ethernet!MN.Soc.SendToAll-> MNCycleIncrease{CycleCounter = (CycleCounter+1)%2} 
 		-> Ethernet!MN.Pres.PRCPresTime
-		-> MNPRCPhrase(1);
-           MNPRCPhrase(2);
-		   MNNormalPhrase(3);
-		   MNNormalPhrase(4);
+		-> MNPRC (1);
+           MNPRC (2);
+		   MNNormal (3);
+		   MNNormal (4);
 		   ifa(CycleCounter == 0)
 		   {
-	        MNMultiplexedPhrase(5)
+	        MNMultiplexed (5)
 		   }
 		   else
 		   {
-			MNMultiplexedPhrase(6)
+			MNMultiplexed (6)
 		   }
 		   ;
 
-MNPRCPhrase(i) = atomic{Ethernet?CN.i.Pres.PR.RS
+MNPRC (i) = atomic{Ethernet?CN.i.Pres.PR.RS
 		      -> UpdateOrnot(i, PR, RS)};
-MNNormalPhrase(i) = Ethernet!MN.Preq.i 
+MNNormal (i) = Ethernet!MN.Preq.i 
 		                    -> atomic{Ethernet?CN.i.Pres.PR.RS
 		                    -> UpdateOrnot(i, PR, RS)};
-MNMultiplexedPhrase(i) = MNNormalPhrase(i);	 
+MNMultiplexed (i) = MNNormal (i);	 
                    
 //根据MN当前的list进行异步调度		   
 PMNAsyn() = MNSchedule
@@ -132,26 +132,26 @@ PMNAsyn() = MNSchedule
 PCN() = PCNSyn();PCNAsyn();    
 PCNSyn() = 	Ethernet?MN.Soc.SendToAll
 	     -> Ethernet?MN.Pres.PRCPresTime
-	     -> PRCSyn(1);
-	        PRCSyn(2);
-	        NormalSyn(3);
-	        NormalSyn(4);
-           (MultiplexedSyn(5)[]MultiplexedSyn(6));
+	     -> CNPRC(1);
+	        CNPRC(2);
+	        CNNormal (3);
+	        CNNormal (4);
+           (CNMultiplexed (5)[]CNMultiplexed (6));
 
 PCNAsyn() = Ethernet?MN.SoA.invitedTarget.invitedType
 	     -> ifa(invitedTarget!=-1){CNAsyn(invitedTarget, invitedType)};
          
 //PRC从站节点同步进程
-PRCSyn(i) = MaxPrio(i);
+CNPRC(i) = MaxPrio(i);
 		    Ethernet!CN.i.Pres.PRSend.RSSend 
 	     -> Skip;
 	     
 //Normal从站节点和Multiplexed从站节点同步进程相同
-NormalSyn(i) = Ethernet?MN.Preq.i 
+CNNormal (i) = Ethernet?MN.Preq.i 
 			-> MaxPrio(i);
 		       Ethernet!CN.i.Pres.PRSend.RSSend
 		    -> Skip;
-MultiplexedSyn(i) = NormalSyn(i);
+CNMultiplexed (i) = CNNormal (i);
 
 //从站异步进程
 CNAsyn(i, invitedType) = 
