@@ -10,7 +10,6 @@ enum{unspecInvite, NMTInvite, noInvite};
 #define MaxRequestsCount 12;
 channel Ethernet 0;
 var CycleCounter = 0;
-var losePresErr =0;
 
 //主站：请求列表，用于调度		
 var MNPR3 = [0, 0, 0, 0];			//主站任务列表

@@ -244,10 +244,12 @@ System() = P() || LosePresHandler();
 #define exceptionHandled exceptionHandling == true; 
 
 //CNPR7[2]=0 && CNPR7[3]=0 && CNPR7[4]=0 && CNPR7[5]=0 && CNPR7[6]=0;
-#assert P() reaches success7; 
-#assert P() reaches success3;
-#assert P() reaches exceptionState;			//是否会到达异常状态
-#assert P() reaches exceptionDisabled;      //是否会在异常抛出前ThresholdCounter减少到0
+#assert System() reaches success7; 
+#assert System() reaches success3;
+#assert System() reaches exceptionState;			//是否会到达异常状态
+#assert System() reaches exceptionDisabled;      //是否会在异常抛出前ThresholdCounter减少到0
 #assert System reaches exceptionHandled;		//异常是否正常抛出处理
 #assert P() deadlockfree;
+
+#assert System() deadlockfree;
 
